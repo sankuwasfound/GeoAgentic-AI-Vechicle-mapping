@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoAgentic Emergency Routing - Karnataka</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <style>
+        :root {
+            --gov-blue: #0056b3; --gov-light-gray: #f9fbfd; --text-dark: #2c3e50; --border-color: #e1e8ed;
+            --alert-red: #d9534f; --success-green: #28a745; --warning-yellow: #f39c12; --mc-purple: #9c27b0;
+        }
+        body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; background-color: var(--gov-light-gray); color: var(--text-dark); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* --- CLEAN THEME LOGIN SCREEN --- */
+        #login-screen { position: fixed; z-index: 10000; top: 0; left: 0; width: 100%; height: 100%; background: var(--gov-light-gray); display: flex; justify-content: center; align-items: center; color: var(--text-dark); }
+        .login-box { background: #ffffff; padding: 40px; border-radius: 8px; border: 1px solid var(--border-color); border-top: 5px solid var(--gov-blue); box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; width: 340px; }
+        .login-box img { height: 90px; margin-bottom: 15px; }
+        .login-box h2 { margin: 0 0 5px 0; font-size: 1.3rem; color: var(--gov-blue); letter-spacing: 0.5px; }
+        .login-box p { color: #6c757d; font-size: 0.85rem; margin-bottom: 25px; font-weight: 500; }
+        .login-box input { width: 100%; padding: 12px; margin: 8px 0; background: #f8fafc; border: 1px solid #cbd5e1; color: var(--text-dark); border-radius: 4px; box-sizing: border-box; font-family: monospace; outline: none; transition: border 0.2s; }
+        .login-box input:focus { border-color: var(--gov-blue); background: #ffffff; }
+        .login-box button { width: 100%; padding: 14px; margin-top: 20px; background: var(--gov-blue); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; letter-spacing: 1px; transition: background 0.2s; }
+        .login-box button:hover { background: #004494; }
+
+        /* --- REDESIGNED LOADING SCREEN (BALANCED CARD STYLE) --- */
+        #loading-screen { position: fixed; z-index: 9999; top: 0; left: 0; width: 100%; height: 100%; background: var(--gov-light-gray); display: none; justify-content: center; align-items: center; }
+        .loading-card { background: #ffffff; padding: 40px; border-radius: 8px; border: 1px solid var(--border-color); border-top: 5px solid var(--gov-blue); box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; width: 340px; }
+        .loading-card img { height: 85px; margin-bottom: 15px; animation: pulseLogo 2s infinite ease-in-out; }
+        .loading-card h2 { margin: 0 0 5px 0; font-size: 1.15rem; color: var(--gov-blue); font-weight: 600; }
+        .loading-card p { color: #6c757d; font-size: 0.82rem; margin-bottom: 25px; font-weight: 500; }
+        
+        .loading-bar-container { width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; position: relative; margin-bottom: 12px; }
+        .loading-bar { width: 40%; height: 100%; background: var(--gov-blue); border-radius: 3px; position: absolute; left: -40%; animation: slideBar 1.2s infinite ease-in-out; }
+        .loading-footer { font-size: 0.78rem; color: #94a3b8; font-family: monospace; }
+
+        @keyframes slideBar { 0% { left: -40%; } 100% { left: 100%; } }
+        @keyframes pulseLogo { 0% { opacity: 0.8; transform: scale(0.98); } 50% { opacity: 1; transform: scale(1.02); } 100% { opacity: 0.8; transform: scale(0.98); } }
+        /* ----------------------------------------------------- */
+
+        header { background-color: #ffffff; border-bottom: 3px solid var(--gov-blue); padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .header-left { display: flex; align-items: center; }
+        header img { height: 65px; margin-right: 20px; }
+        h1 { margin: 0; font-size: 1.4rem; color: var(--gov-blue); font-weight: 600; }
+        .subtitle { font-size: 0.85rem; color: #6c757d; font-weight: 500; }
+        .voice-status-badge { background-color: #e2e8f0; color: #475569; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border: 1px solid #cbd5e1; transition: all 0.2s; }
+        .voice-status-badge.active { background-color: #d1fae5; color: #065f46; border-color: #34d399; }
+        .container { display: flex; flex: 1; overflow: hidden; position: relative; }
+        .sidebar { width: 420px; background-color: #ffffff; border-right: 1px solid var(--border-color); padding: 20px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.02); z-index: 1000; }
+        .card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 6px; padding: 16px; margin-bottom: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+        .card h3 { margin-top: 0; font-size: 1.05rem; border-bottom: 2px solid var(--gov-light-gray); padding-bottom: 8px; color: var(--gov-blue); }
+        .card p { margin: 8px 0; font-size: 0.95rem; }
+        .status-alert { color: var(--alert-red); font-weight: bold; }
+        .status-success { color: var(--success-green); font-weight: bold; }
+        .status-warning { color: var(--warning-yellow); font-weight: bold; }
+        label { display: block; margin-top: 10px; font-weight: 500; font-size: 0.9rem; }
+        input[type=range] { width: 100%; margin: 8px 0 15px 0; }
+        #map { flex: 1; height: 100%; cursor: crosshair; }
+        button { background-color: var(--gov-blue); color: white; border: none; padding: 12px 15px; cursor: pointer; border-radius: 4px; font-size: 0.95rem; font-weight: 600; width: 100%; margin-top: 10px; transition: background 0.2s; }
+        button:hover { background-color: #004494; }
+        .btn-success { background-color: var(--success-green); }
+        .btn-success:hover { background-color: #218838; }
+        .btn-purple { background-color: var(--mc-purple); }
+        .btn-purple:hover { background-color: #7b1fa2; }
+        .custom-traffic-light { background: transparent; border: none; }
+        .traffic-light-box { background-color: #2c3e50; border-radius: 6px; width: 22px; height: 44px; display: flex; flex-direction: column; justify-content: center; align-items: center; border: 2px solid #1a252f; box-shadow: 0 4px 6px rgba(0,0,0,0.4); padding: 2px 0; }
+        .light-bulb { width: 12px; height: 12px; border-radius: 50%; margin: 2px 0; background-color: #111; transition: all 0.3s ease; }
+        .red-active .bulb-red { background-color: #ff3b30; box-shadow: 0 0 10px #ff3b30; }
+        .green-active .bulb-green { background-color: #34c759; box-shadow: 0 0 10px #34c759; }
+        .hospital-icon-box { background: #d9534f; color: white; width: 26px; height: 26px; border-radius: 50%; text-align: center; line-height: 26px; font-weight: bold; font-family: sans-serif; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.4); }
+        
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 2000; align-items: center; justify-content: center; }
+        .modal-content { background: #fff; width: 700px; max-width: 90%; border-radius: 8px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); font-family: 'Courier New', Courier, monospace; position: relative; border-top: 5px solid var(--gov-blue); }
+        .modal-header { font-size: 1.4rem; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; color: var(--gov-blue); }
+        .close-btn { position: absolute; top: 20px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #999; border: none; background: transparent; width: auto; padding: 0; margin: 0; }
+        #typewriter-text { white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #333; min-height: 250px; }
+        .cursor { display: inline-block; width: 8px; height: 15px; background: #333; animation: blink 1s step-end infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        .drone-feed-container {
+            display: none; position: absolute; bottom: 30px; right: 30px; width: 320px; height: 220px;
+            background: repeating-linear-gradient(0deg, #111, #111 2px, #222 2px, #222 4px);
+            border: 3px solid #333; border-radius: 8px; z-index: 900; box-shadow: 0 10px 30px rgba(0,0,0,0.6); overflow: hidden; font-family: monospace;
+        }
+        .drone-feed-header { position: absolute; top: 10px; left: 10px; color: #0f0; font-size: 0.8rem; z-index: 2; text-shadow: 0 0 5px #0f0; }
+        .rec-indicator { position: absolute; top: 10px; right: 10px; color: red; font-weight: bold; z-index: 2; animation: blink 1s infinite; text-shadow: 0 0 5px red; }
+        .crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 50px; height: 50px; border: 2px solid rgba(0,255,0,0.4); border-radius: 50%; z-index: 2;
+        }
+        .crosshair::before, .crosshair::after { content: ''; position: absolute; background: rgba(0,255,0,0.4); }
+        .crosshair::before { top: 50%; left: -15px; right: -15px; height: 2px; transform: translateY(-50%); }
+        .crosshair::after { left: 50%; top: -15px; bottom: -15px; width: 2px; transform: translateX(-50%); }
+        .scanline {
+            position: absolute; top: 0; left: 0; width: 100%; height: 5px; background: rgba(0, 255, 0, 0.3); opacity: 0.6; animation: scan 3s linear infinite; z-index: 3; box-shadow: 0 0 10px rgba(0,255,0,0.5);
+        }
+        @keyframes scan { 0% { top: -5%; } 100% { top: 105%; } }
+
+        .macro-fleet div { animation: pulseFleet 2s infinite; }
+        @keyframes pulseFleet {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 86, 179, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 86, 179, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 86, 179, 0); }
+        }
+
+        .custom-amb { transition: transform 0.15s linear; } 
+    </style>
+</head>
+<body>
+
+<!-- CLEAN LOGIN SCREEN -->
+<div id="login-screen">
+    <div class="login-box">
+        <img src="logo.png" alt="Gov Logo" onerror="this.src='https://via.placeholder.com/90x90?text=Logo'">
+        <h2>CENTRAL COMMAND</h2>
+        <p>Operator Authentication Required</p>
+        <input type="text" placeholder="Operator ID" value="ADMIN_NODE_01" readonly>
+        <input type="password" placeholder="Passcode" value="********" readonly>
+        <button id="login-btn" onclick="executeAuthentication()">LOGIN</button>
+    </div>
+</div>
+
+<!-- REDESIGNED LOADING SCREEN (CARD-MATCHED STYLE) -->
+<div id="loading-screen">
+    <div class="loading-card">
+        <img src="logo.png" alt="Gov Logo" onerror="this.src='https://via.placeholder.com/85x85?text=Logo'">
+        <h2>Government of Karnataka</h2>
+        <p>GeoAgentic Routing Framework</p>
+        <div class="loading-bar-container">
+            <div class="loading-bar"></div>
+        </div>
+        <div class="loading-footer">Initializing System...</div>
+    </div>
+</div>
+
+<!-- MAIN APPLICATION UI -->
+<header>
+    <div class="header-left">
+        <img src="logo.png" alt="Government of Karnataka Logo" onerror="this.src='https://via.placeholder.com/65x65?text=Logo'">
+        <div>
+            <h1>GeoAgentic Emergency Vehicle Movement Framework</h1>
+            <div class="subtitle">Bengaluru City Traffic Police & Emergency Response</div>
+        </div>
+    </div>
+    <div id="voice-badge" class="voice-status-badge" onclick="toggleVoice()">🔇 Click to Enable Voice Comm-Link</div>
+</header>
+
+<div class="container">
+    <div class="sidebar">
+        <div class="card" style="border-color: var(--mc-purple); background-color: #faf5fc;">
+            <h3 style="color: var(--mc-purple);">Digital Twin Simulator (Monte Carlo)</h3>
+            <p><strong>Status:</strong> <span id="mc-status" style="color: #666;">Standby</span></p>
+            <p><strong>SLA Compliance (35m):</strong> <span id="mc-sla" style="font-weight:bold;">--</span></p>
+            <p><strong>Primary Grid Bottleneck:</strong> <span id="mc-bottleneck" style="font-weight:bold;">--</span></p>
+            <p><strong>Batch Fleet CO₂ Saved:</strong> <span id="mc-co2" style="font-weight:bold; color:var(--success-green);">--</span></p>
+            <button class="btn-purple" onclick="runMonteCarlo()" id="btn-mc">Run 50x Fleet Simulation</button>
+        </div>
+
+        <div class="card" style="background-color: #f4f8fc; border-color: #cce0ff;">
+            <h3>Emergency Call Intake (SVM Matrix)</h3>
+            <label>Heart Rate (BPM): <span id="hr-val" style="color:var(--alert-red); font-weight:bold;">140</span></label>
+            <input type="range" id="slider-hr" min="60" max="200" value="140" oninput="document.getElementById('hr-val').innerText = this.value; checkColor(this, 'hr-val', 100);">
+            <label>Oxygen (SpO2 %): <span id="o2-val" style="color:var(--alert-red); font-weight:bold;">88</span></label>
+            <input type="range" id="slider-o2" min="70" max="100" value="88" oninput="document.getElementById('o2-val').innerText = this.value; checkColorInvert(this, 'o2-val', 95);">
+            <label>Trauma Level (1-10): <span id="trauma-val" style="color:var(--alert-red); font-weight:bold;">8</span></label>
+            <input type="range" id="slider-trauma" min="1" max="10" value="8" oninput="document.getElementById('trauma-val').innerText = this.value; checkColor(this, 'trauma-val', 6);">
+            <button class="btn-success" onclick="startDispatch()">Validate & Dispatch Fleet</button>
+        </div>
+
+        <div class="card">
+            <h3>Live Telemetry</h3>
+            <p><strong>Dispatched Unit:</strong> <span id="svm-id-text">Awaiting Dispatch...</span></p>
+            <p><strong>Current Status:</strong> <span class="status-success" id="svm-status-text">Standby</span></p>
+            <button class="btn-purple" id="btn-icu" style="display:none; margin-top: 15px;" onclick="requestICUTransfer()">Patient Secured: Request ICU Routing</button>
+        </div>
+        
+        <div class="card">
+            <h3>Routing Engine & Analytics</h3>
+            <p><strong>Active Model:</strong> Dynamic A* w/ Dispersion Index</p>
+            <p><strong>Atmospheric Data:</strong> <span id="weather-status-text" style="color:var(--text-light); font-weight:600;">Awaiting Telemetry...</span></p>
+            <p><strong>AI Prediction:</strong> <span id="delay-text">Monitoring conditions...</span></p>
+            <button onclick="recalculateRoute()" id="btn-reroute" disabled style="opacity: 0.6;">Manual Map Override</button>
+        </div>
+
+        <div class="card">
+            <h3>Smart Infrastructure (V2I)</h3>
+            <p><strong>Junction Pre-emption:</strong> <span class="status-success" id="v2i-text">Standby</span></p>
+        </div>
+
+        <div class="card" id="civilian-card">
+            <h3>Civilian Geofencing (500m)</h3>
+            <ul id="geofence-logs" style="font-size: 0.85rem; padding-left: 15px; color: #555;">
+                <li>Scanning for civilian devices within 500m...</li>
+            </ul>
+        </div>
+        
+        <div class="card">
+            <h3>Post-Incident AI Debrief</h3>
+            <p><strong>CO₂ Emissions Prevented:</strong> <span id="co2-text" style="color:var(--success-green); font-weight:bold;">0.0 kg</span></p>
+            <p><strong>Fuel Idling Saved:</strong> <span id="fuel-text" style="color:var(--success-green); font-weight:bold;">0.0 Liters</span></p>
+            <button class="btn-success" onclick="requestAIReport()" id="btn-ai" style="display:none; margin-top: 15px; background-color: #000; border: 1px solid #333;">Generate AI Post-Incident Debrief</button>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+
+    <div class="drone-feed-container" id="drone-ui">
+        <div class="drone-feed-header">UNIT: AERO-1 // LIVE FEED</div>
+        <div class="rec-indicator">● REC</div>
+        <div class="crosshair"></div>
+        <div class="scanline"></div>
+        <div style="position: absolute; bottom: 10px; left: 10px; color: #0f0; font-size: 0.7rem;">ALT: 400ft<br>SPD: 0kts (HOVER)</div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="ai-modal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+        <div class="modal-header">CONFIDENTIAL // POST-INCIDENT DEBRIEF</div>
+        <div id="typewriter-text"></div><span class="cursor" id="cursor"></span>
+        <p style="font-family: sans-serif; font-size: 0.75rem; color: #888; text-align: right; margin-top: 20px;">Source: <span id="ai-source">System</span></p>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+    function executeAuthentication() {
+        const btn = document.getElementById('login-btn');
+        btn.innerText = "AUTHENTICATING...";
+        btn.style.opacity = "0.7";
+        btn.style.cursor = "not-allowed";
+        
+        setTimeout(() => {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('loading-screen').style.display = 'flex';
+            
+            setTimeout(() => {
+                const loader = document.getElementById('loading-screen');
+                loader.style.transition = "opacity 0.6s ease-out";
+                loader.style.opacity = "0";
+                setTimeout(() => { loader.style.display = "none"; }, 600);
+            }, 2500); 
+        }, 800);
+    }
+
+    function checkColor(el, id, threshold) { document.getElementById(id).style.color = parseInt(el.value) > threshold ? 'var(--alert-red)' : 'var(--success-green)'; }
+    function checkColorInvert(el, id, threshold) { document.getElementById(id).style.color = parseInt(el.value) < threshold ? 'var(--alert-red)' : 'var(--success-green)'; }
+
+    const map = L.map('map').setView([12.9716, 77.5946], 12);
+    L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { attribution: 'Map data &copy; Google', maxZoom: 20 }).addTo(map);
+
+    const macroFleetMarkers = [];
+    const centerLat = 12.9716; const centerLng = 77.5946;
+    const fleetIcon = L.divIcon({ className: 'macro-fleet', html: '<div style="width: 14px; height: 14px; background: #0056b3; border-radius: 50%; box-shadow: 0 0 10px #0056b3;"></div>', iconSize: [14, 14] });
+    for(let i=0; i<18; i++) {
+        let rLat = centerLat + (Math.random() - 0.5) * 0.18;
+        let rLng = centerLng + (Math.random() - 0.5) * 0.18;
+        let m = L.marker([rLat, rLng], {icon: fleetIcon}).addTo(map);
+        macroFleetMarkers.push(m);
+    }
+
+    const startPoint = L.latLng(12.9352, 77.6245); 
+    const endPoint = L.latLng(12.9784, 77.6408);   
+
+    const startMarker = L.marker(startPoint).bindPopup("<b>Unit Origin</b>");
+    const endMarker = L.marker(endPoint).bindPopup("<b>Emergency Scene</b><br>Code Red");
+
+    const hospitalIcon = L.divIcon({ className: 'custom-hospital-icon', html: `<div class="hospital-icon-box">H</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    L.marker([12.9585, 77.6485], {icon: hospitalIcon}).addTo(map).bindPopup("<b>Manipal Hospital (HAL)</b><br>Beds: 0");
+    L.marker([12.9780, 77.6410], {icon: hospitalIcon}).addTo(map).bindPopup("<b>Apollo Hospital</b><br>Beds: 2");
+    L.marker([12.9800, 77.5900], {icon: hospitalIcon}).addTo(map).bindPopup("<b>Fortis Hospital</b><br>Beds: 5");
+
+    let routingControl = L.Routing.control({
+        waypoints: [], routeWhileDragging: false, showAlternatives: false,
+        lineOptions: { styles: [{color: '#0056b3', opacity: 0.9, weight: 6}] }, createMarker: function() { return null; } 
+    }).addTo(map);
+
+    function createTrafficLightIcon(state) {
+        return L.divIcon({ className: 'custom-traffic-light', html: `<div class="traffic-light-box ${state === 'red' ? 'red-active' : 'green-active'}"><div class="light-bulb bulb-red"></div><div class="light-bulb bulb-green"></div></div>`, iconSize: [22, 44], iconAnchor: [11, 22] });
+    }
+    const signalVivekNagar = L.marker([12.9450, 77.6310], {icon: createTrafficLightIcon('red')});
+    const signalDomlur = L.marker([12.9560, 77.6450], {icon: createTrafficLightIcon('red')});
+
+    const civilianMarkers = {
+        'Device-A (Honda City)': L.circleMarker([12.9360, 77.6250], { color: '#666', radius: 7, fillOpacity: 0.8 }).bindPopup("Civilian: Honda City"),
+        'Device-B (Pedestrian)': L.circleMarker([12.9440, 77.6300], { color: '#666', radius: 7, fillOpacity: 0.8 }).bindPopup("Civilian: Pedestrian")
+    };
+
+    let voiceActive = false;
+    function toggleVoice() {
+        voiceActive = !voiceActive;
+        const badge = document.getElementById('voice-badge');
+        if (voiceActive) {
+            badge.className = "voice-status-badge active"; badge.innerText = "🔊 Voice Comm-Link Online";
+            speak("Voice communication link established. Central Command is listening.");
+        } else {
+            badge.className = "voice-status-badge"; badge.innerText = "🔇 Click to Enable Voice Comm-Link";
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        }
+    }
+    function speak(text, interrupt = false) {
+        if (!voiceActive || !('speechSynthesis' in window)) return;
+        if (interrupt) window.speechSynthesis.cancel();
+        const speech = new SpeechSynthesisUtterance(text); speech.lang = 'en-IN'; speech.rate = 1.05;
+        window.speechSynthesis.speak(speech);
+    }
+
+    const socket = io();
+    let ambulanceMarker; let ambulanceGeofence; let customObstacleCircle; let activeDroneMarker;
+    let activeIncidentData = { delay: "0 mins", severity: "Unknown", co2: "0 kg", fuel: "0 Liters", unit: "N/A", hospital: "Pending", weather: "Unknown" };
+
+    let activeRouteCoords = [];
+    let ambProgressIndex = 0;
+    let isAmbulanceMoving = false;
+    let isRerouting = false;
+    let ambAnimInterval = null;
+
+    routingControl.on('routesfound', function(e) {
+        activeRouteCoords = e.routes[0].coordinates;
+        if (ambulanceMarker && isRerouting) {
+            let closestIdx = 0;
+            let minDist = Infinity;
+            const currentPos = ambulanceMarker.getLatLng();
+            activeRouteCoords.forEach((coord, idx) => {
+                const dist = currentPos.distanceTo(L.latLng(coord.lat, coord.lng));
+                if (dist < minDist) { minDist = dist; closestIdx = idx; }
+            });
+            ambProgressIndex = closestIdx;
+            isRerouting = false;
+        }
+    });
+
+    function startAmbulanceAnimation() {
+        if(ambAnimInterval) clearInterval(ambAnimInterval);
+        isAmbulanceMoving = true;
+        
+        ambAnimInterval = setInterval(() => {
+            if (!isAmbulanceMoving || !activeRouteCoords || activeRouteCoords.length === 0) return;
+            
+            if (ambProgressIndex < activeRouteCoords.length - 1) {
+                ambProgressIndex += 1; 
+                if (ambProgressIndex >= activeRouteCoords.length) ambProgressIndex = activeRouteCoords.length - 1;
+                
+                const nextPos = activeRouteCoords[ambProgressIndex];
+                
+                if (ambulanceMarker) {
+                    ambulanceMarker.setLatLng([nextPos.lat, nextPos.lng]);
+                }
+                if (ambulanceGeofence) {
+                    ambulanceGeofence.setLatLng([nextPos.lat, nextPos.lng]);
+                }
+            } else {
+                isAmbulanceMoving = false; 
+            }
+        }, 120); 
+    }
+
+    function runMonteCarlo() {
+        document.getElementById('mc-status').innerText = "Simulating 50 permutations..."; document.getElementById('mc-status').style.color = "var(--mc-purple)";
+        document.getElementById('btn-mc').innerText = "Running..."; document.getElementById('btn-mc').disabled = true;
+        speak("Executing digital twin stress test.", true);
+        socket.emit('start_monte_carlo');
+    }
+
+    socket.on('monte_carlo_results', (results) => {
+        document.getElementById('mc-status').innerText = "Batch Complete."; document.getElementById('mc-status').style.color = "var(--success-green)";
+        document.getElementById('btn-mc').innerText = "Run 50x Fleet Simulation"; document.getElementById('btn-mc').disabled = false;
+        document.getElementById('mc-sla').innerText = `${results.complianceRate}%`; document.getElementById('mc-sla').style.color = results.complianceRate > 80 ? "var(--success-green)" : "var(--alert-red)";
+        document.getElementById('mc-bottleneck').innerText = results.worstBottleneck; document.getElementById('mc-bottleneck').style.color = "var(--alert-red)";
+        document.getElementById('mc-co2').innerText = `${results.co2Saved} kg`;
+        speak(`Simulation analysis complete. SLA compliance rate is ${results.complianceRate} percent. Primary bottleneck is ${results.worstBottleneck}.`, true);
+    });
+
+    function startDispatch() {
+        const hr = parseInt(document.getElementById('slider-hr').value); const o2 = parseInt(document.getElementById('slider-o2').value); const trauma = parseInt(document.getElementById('slider-trauma').value);
+        
+        speak("Emergency intake verified. Executing tactical zoom and isolating local grid.", true);
+        
+        map.flyTo([12.9550, 77.6300], 14, { animate: true, duration: 2.0 });
+        macroFleetMarkers.forEach(m => map.removeLayer(m));
+
+        setTimeout(() => {
+            startMarker.addTo(map).openPopup();
+            endMarker.addTo(map);
+            routingControl.setWaypoints([startPoint, endPoint]);
+            signalVivekNagar.addTo(map);
+            signalDomlur.addTo(map);
+            Object.values(civilianMarkers).forEach(m => m.addTo(map));
+            
+            socket.emit('initiate_dispatch', { hr, o2, trauma });
+        }, 1500); 
+        
+        document.getElementById('btn-icu').style.display = "none";
+        document.getElementById('btn-ai').style.display = "none";
+        document.getElementById('drone-ui').style.display = "none";
+        document.getElementById('btn-reroute').disabled = false; document.getElementById('btn-reroute').style.opacity = 1;
+        document.getElementById('weather-status-text').innerText = "Pinging satellite data...";
+        
+        if (ambulanceMarker) { map.removeLayer(ambulanceMarker); ambulanceMarker = null; }
+        if (ambulanceGeofence) { map.removeLayer(ambulanceGeofence); ambulanceGeofence = null; }
+        if (activeDroneMarker) { map.removeLayer(activeDroneMarker); activeDroneMarker = null; }
+
+        document.getElementById('geofence-logs').innerHTML = '<li>Scanning for civilian devices within 500m...</li>';
+        Object.values(civilianMarkers).forEach(m => m.setStyle({ color: '#666', fillColor: '#666' }));
+        signalVivekNagar.setIcon(createTrafficLightIcon('red')); signalDomlur.setIcon(createTrafficLightIcon('red'));
+    }
+
+    socket.on('weather_status', (weather) => {
+        const weatherUI = document.getElementById('weather-status-text');
+        if (weather.isRaining) {
+            weatherUI.innerText = `Active Monsoon - Grip Loss Penalty Applied`;
+            weatherUI.style.color = "var(--alert-red)";
+            speak("Inclement weather detected. Modifying fleet velocity and recalculating grip-loss routing.", false);
+        } else {
+            weatherUI.innerText = `Clear Skies - Normal Operations`;
+            weatherUI.style.color = "var(--success-green)";
+        }
+        activeIncidentData.weather = weather.desc;
+    });
+
+    socket.on('dispatch_confirmed', (allocation) => {
+        const colorClass = allocation.severity === 'CODE_RED' ? 'status-alert' : 'status-warning';
+        document.getElementById('svm-id-text').innerHTML = `<span class="${colorClass}">${allocation.unit.id} (${allocation.unit.type})</span>`;
+        document.getElementById('svm-status-text').innerText = `Dispatched - ${allocation.severity}`;
+        document.getElementById('svm-status-text').className = colorClass;
+        activeIncidentData.unit = allocation.unit.id; activeIncidentData.severity = allocation.severity;
+        speak(`Patient classified as ${allocation.severity.replace('_', ' ')}. Dispatching ${allocation.unit.type}.`, false);
+        
+        const ambIcon = L.divIcon({ className: 'custom-amb', html: '<div style="font-size: 35px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6));">🚑</div>', iconSize: [40, 40], iconAnchor: [20, 20] });
+        if (!ambulanceMarker) {
+            ambulanceMarker = L.marker([startPoint.lat, startPoint.lng], {icon: ambIcon, zIndexOffset: 1000}).addTo(map);
+            ambulanceGeofence = L.circle([startPoint.lat, startPoint.lng], { radius: 500, color: '#0056b3', fillColor: '#0056b3', fillOpacity: 0.1, weight: 2 }).addTo(map);
+        }
+        ambProgressIndex = 0;
+        startAmbulanceAnimation();
+    });
+
+    socket.on('deploy_drone', () => {
+        speak("Code Red confirmed. Launching aerial first responder drone to secure visual.", false);
+        const droneIcon = L.divIcon({ className: 'custom-drone', html: '<div style="font-size: 45px; filter: drop-shadow(0 5px 8px rgba(0,0,0,0.8));">🚁</div>', iconSize: [50, 50], iconAnchor: [25, 25] });
+        activeDroneMarker = L.marker([startPoint.lat, startPoint.lng], {icon: droneIcon, zIndexOffset: 9999}).addTo(map);
+
+        let startTime = null; 
+        const duration = 8000; 
+        
+        function animateDrone(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const progress = (timestamp - startTime) / duration;
+            if (progress < 1) {
+                const currentLat = startPoint.lat + (endPoint.lat - startPoint.lat) * progress;
+                const currentLng = startPoint.lng + (endPoint.lng - startPoint.lng) * progress;
+                activeDroneMarker.setLatLng([currentLat, currentLng]);
+                requestAnimationFrame(animateDrone);
+            } else {
+                activeDroneMarker.setLatLng([endPoint.lat, endPoint.lng]);
+                document.getElementById('drone-ui').style.display = 'block';
+                speak("Drone arrived at destination. Live aerial feed established.", true);
+            }
+        }
+        requestAnimationFrame(animateDrone);
+    });
+
+    socket.on('telemetry_update', (data) => {
+        if (ambulanceMarker) { 
+            ambulanceMarker.setPopupContent(`<b>${data.vehicleId}</b><br>Speed: ${data.speed} km/h`); 
+            if(!ambulanceMarker.isPopupOpen()) ambulanceMarker.openPopup();
+        }
+    });
+
+    let civilianWarned = false;
+    socket.on('civilian_alert', (data) => {
+        const civMarker = civilianMarkers[data.deviceId];
+        if (civMarker) {
+            civMarker.setStyle({ color: '#d9534f', fillColor: '#d9534f' });
+            civMarker.setPopupContent(`<b>${data.deviceId}</b><br><span style='color:red;'>🚨 AMBULANCE WITHIN ${data.distance}m. YIELD!</span>`).openPopup();
+            const logList = document.getElementById('geofence-logs');
+            if (logList.innerHTML.includes("Scanning")) logList.innerHTML = ""; 
+            if (!logList.innerHTML.includes(data.deviceId)) { 
+                logList.innerHTML += `<li style="color: var(--alert-red); margin-bottom: 5px;"><b>${data.deviceId}</b> notified (Distance: ${data.distance}m)</li>`; 
+                if (!civilianWarned) { speak("Proximity alert. Unregistered civilian device detected. Pushing yield directive.", false); civilianWarned = true; }
+            }
+        }
+    });
+
+    socket.on('deviation_alert', (alertData) => {
+        isAmbulanceMoving = false; 
+        speak("Traffic anomaly identified. Corridor integrity compromised.", true);
+        alert(`🚨 ALERT: \n\n${alertData.cause}`);
+        document.getElementById('delay-text').innerText = alertData.delay;
+        document.getElementById('delay-text').className = "status-alert";
+    });
+
+    function recalculateRoute() { speak("Executing manual override.", true); socket.emit('trigger_reroute'); }
+
+    map.on('click', function(e) {
+        const lat = e.latlng.lat; const lng = e.latlng.lng;
+        if (customObstacleCircle) { customObstacleCircle.setLatLng([lat, lng]); } 
+        else { customObstacleCircle = L.circle([lat, lng], { color: 'red', fillColor: '#f03', fillOpacity: 0.3, radius: 600 }).addTo(map); }
+        speak("Spatial obstacle dropped on grid. Forcing graph dispersion algorithm.", true);
+        socket.emit('custom_obstacle', { lat, lng });
+    });
+
+    socket.on('reroute_confirmed', (data) => {
+        speak("Alternative vector locked. Bypassing congestion epicenter.", false);
+        isRerouting = true; 
+        
+        const newWaypoints = [ ambulanceMarker ? ambulanceMarker.getLatLng() : startPoint, L.latLng(data.newPath[1].lat, data.newPath[1].lng), endPoint ];
+        routingControl.setWaypoints(newWaypoints); 
+        
+        isAmbulanceMoving = true; 
+
+        document.getElementById('v2i-text').innerText = data.v2i_status;
+        signalVivekNagar.setIcon(createTrafficLightIcon('green')); signalDomlur.setIcon(createTrafficLightIcon('green'));
+
+        const litersSaved = (30 * 0.06).toFixed(1); const co2Saved = (litersSaved * 2.68).toFixed(2);
+        document.getElementById('fuel-text').innerText = `${litersSaved} Liters`; document.getElementById('co2-text').innerText = `${co2Saved} kg`;
+        
+        activeIncidentData.delay = data.weather.isRaining ? "36 mins" : "30 mins"; 
+        activeIncidentData.co2 = `${co2Saved} kg`; activeIncidentData.fuel = `${litersSaved} Liters`;
+        document.getElementById('btn-icu').style.display = "block";
+    });
+
+    function requestICUTransfer() {
+        speak("Patient secured at scene. Querying regional hospital networks for live I.C.U. bed availability.", true);
+        document.getElementById('drone-ui').style.display = 'none';
+        const currentLoc = ambulanceMarker ? ambulanceMarker.getLatLng() : endPoint;
+        socket.emit('request_icu_transfer', { lat: currentLoc.lat, lng: currentLoc.lng });
+    }
+
+    socket.on('icu_allocated', (data) => {
+        const h = data.bestHospital;
+        const currentLoc = ambulanceMarker ? ambulanceMarker.getLatLng() : endPoint;
+        isRerouting = true;
+        routingControl.setWaypoints([currentLoc, L.latLng(h.lat, h.lng)]);
+        document.getElementById('svm-status-text').innerText = `In Transit to ${h.id}`;
+        
+        activeIncidentData.hospital = h.id;
+        speak(`Warning: ${data.fullHospitals.join(" and ")} is currently at critical capacity with zero beds available. Diverting ambulance to ${h.id}.`, false);
+        document.getElementById('btn-ai').style.display = "block";
+    });
+
+    let typingInterval;
+    function requestAIReport() {
+        speak("Processing incident telemetry. Passing context to Large Language Model for debriefing synthesis.", true);
+        document.getElementById('ai-modal').style.display = 'flex';
+        document.getElementById('typewriter-text').innerText = "Querying Generative AI Model...";
+        document.getElementById('ai-source').innerText = "System";
+        document.getElementById('btn-ai').innerText = "Regenerate Report";
+        socket.emit('generate_ai_report', activeIncidentData);
+    }
+
+    socket.on('ai_report_ready', (data) => {
+        document.getElementById('typewriter-text').innerText = "";
+        document.getElementById('ai-source').innerText = data.source;
+        speak("Debriefing complete. Displaying synthesized report.", false);
+        
+        let i = 0;
+        const text = data.report;
+        if (typingInterval) clearInterval(typingInterval);
+        
+        typingInterval = setInterval(() => {
+            if (i < text.length) {
+                document.getElementById('typewriter-text').innerHTML += text.charAt(i);
+                i++;
+            } else { clearInterval(typingInterval); }
+        }, 15); 
+    });
+
+    function closeModal() {
+        document.getElementById('ai-modal').style.display = 'none';
+        if (typingInterval) clearInterval(typingInterval);
+    }
+</script>
+
+</body>
+</html>
